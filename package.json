@@ -19,7 +19,20 @@
     "compile": "tsc -p .",
     "watch": "tsc -w -p ."
   },
-  "keywords": [],
+  "keywords": [
+    "c",
+    "testing",
+    "test-discovery",
+    "test-explorer",
+    "vscode-testing",
+    "binary-tests",
+    "compiled-tests",
+    "build-artifacts",
+    "build-system-agnostic",
+    "scan",
+    "discover",
+    "native"
+  ],
   "author": "Sunny Narula(voidtoverse.com)",
   "license": "ISC",
   "devDependencies": {
