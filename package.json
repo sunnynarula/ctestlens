@@ -5,7 +5,14 @@
   "main": "./dist/extension.js",
   "engines": { "vscode": "^1.85.0" },
   "activationEvents": ["onStartupFinished"],
-  "contributes": {},
+  "contributes": {
+    "commands": [
+      {
+        "command": "cBinaryTests.hello",
+        "title": "C Binary Tests: Hello"
+      }
+    ]
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "compile": "tsc -p .",
