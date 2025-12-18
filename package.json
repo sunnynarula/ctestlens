@@ -9,8 +9,12 @@
   "contributes": {
     "commands": [
       {
-        "command": "cBinaryTests.hello",
-        "title": "C Binary Tests: Hello"
+        "command": "cTestLens.initConfig",
+        "title": "CTestLens: Create sample config"
+      },
+      {
+        "command": "cTestLens.discover",
+        "title": "CTestLens: Rediscover tests"
       }
     ]
   },
