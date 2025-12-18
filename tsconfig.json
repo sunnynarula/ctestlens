@@ -1,13 +1,36 @@
+/*
+The build configuration for the TypeScript compiler
+TypeScript:
+ - Reads tsconfig.json
+ - Applies all compiler options
+ - Compiles .ts → .js accordingly
+ All these flags/option affect emitted logic of your program
+*/
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "lib": ["ES2020"],
-    "rootDir": "src",
-    "outDir": "dist",
-    "strict": true,
-    "esModuleInterop": true,
-    "sourceMap": true
+    "target": "ES2020",         //Which JS language features may appear
+    "module": "commonjs",       /*What module format to emit?
+                                  Produce JavaScript that follows the CommonJS loading contract.
+                                */
+    "lib": ["ES2020"],          /*Lice c # include.
+                                  ES2020 includes:
+                                  - BigInt
+                                  - Promise.allSettled
+                                  - globalThis
+                                  - String.matchAll
+                                  - import.meta (type support)
+                                */
+    "rootDir": "src",           //My typescript lives here
+    "outDir": "dist",           //Put compiled js here package.json main refers to this path so we need to keep it in sync
+    "strict": true,             //Type-checking rules
+    "esModuleInterop": true,    /*How forgiving should imports be?
+                                  When I import something using ES-module syntax, but the thing I’m importing is actually CommonJS, make it work.
+                                  It:
+                                  - Generates helper code
+                                  - Adjusts type expectations
+                                  - Smooths over default-import mismatches
+                                */
+    "sourceMap": true           //Debugging support on
   },
   "exclude": ["node_modules", ".vscode-test"]
 }

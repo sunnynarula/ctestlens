@@ -3,16 +3,11 @@
 # The mental model (keep this in your head)
 
 A VS Code extension is basically:
-
 A Node.js program (your compiled JS) that VS Code can load.
-
 A manifest (package.json) that tells VS Code:
-
-what file to run (main)
-
-when to start it (activationEvents)
-
-what UI things it provides (contributes)
+- what file to run (main)
+- when to start it (activationEvents)
+- what UI things it provides (contributes)
 
 A debug launcher (.vscode/launch.json) that starts a separate VS Code instance (Extension Development Host) with your extension loaded from disk.
 
@@ -139,6 +134,33 @@ so you don’t need to package/install it to test
 
 
 So breakpoints in TS map to compiled JS via sourcemaps.
+
+## npm install
+This must be run in the root of the project, to install any required dependencies it also sets up tsc
+in node_modules/.bin/tsc
+This will read package.json and tsconfig.json and generate package-lock.json
+The process resolves dependency versions
+
+## What package-lock.json actually is
+Think of it as:
+
+“The exact dependency graph that is known to work.”
+
+It records:
+
+- Exact versions of typescript, @types/vscode, etc.
+- Transitive dependencies (what they depend on)
+- Integrity hashes
+
+This guarantees:
+- You get the same behavior next week
+- You get the same behavior on another machine
+- You don’t suddenly break because a dependency released a bad update
+
+This is especially important for VS Code extensions, because:
+- They are Node-based
+- Subtle version mismatches do break extension hosts
+
 
 ## Why tests only appear in the Extension Development Host window
 
