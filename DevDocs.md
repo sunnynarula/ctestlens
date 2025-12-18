@@ -1,5 +1,21 @@
 # Documentation
 
+# The mental model (keep this in your head)
+
+A VS Code extension is basically:
+
+A Node.js program (your compiled JS) that VS Code can load.
+
+A manifest (package.json) that tells VS Code:
+
+what file to run (main)
+
+when to start it (activationEvents)
+
+what UI things it provides (contributes)
+
+A debug launcher (.vscode/launch.json) that starts a separate VS Code instance (Extension Development Host) with your extension loaded from disk.
+
 ## Our First Command after creating project folder: npm init -y
 Creates package.json as a Node project manifest.
 VS Code extensions are distributed and built like Node packages.
