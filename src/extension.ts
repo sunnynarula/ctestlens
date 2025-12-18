@@ -2,6 +2,7 @@ import * as vscode from "vscode"; //This imports the VS Code Extension API
 import * as path from "path";
 import * as fs from "fs/promises";
 import { constants as fsConstants } from "fs";
+import { spawn } from "child_process";
 
 type RootEntry = {
   // Exactly one of these:
@@ -430,39 +431,192 @@ export function activate(context: vscode.ExtensionContext) {//Lifecycle Entry Po
     "Run",
     vscode.TestRunProfileKind.Run,
     async (request, token) => {
-      const run = controller.createTestRun(request, "Step 3.5 run (no execution yet)");
+      const run = controller.createTestRun(request, "CTestLens run");
 
-      const testsToRun: vscode.TestItem[] = [];
-      if (request.include && request.include.length > 0) testsToRun.push(...request.include);
-      else controller.items.forEach(t => testsToRun.push(t));
+      // Build selection
+      const selected: vscode.TestItem[] = [];
+      if (request.include && request.include.length > 0) selected.push(...request.include);
+      else controller.items.forEach(t => selected.push(t));
 
-      // Flatten groups → leaves only
+      // Flatten groups -> leaves
       const leaves: vscode.TestItem[] = [];
       const visit = (t: vscode.TestItem) => {
         if (t.children.size === 0) leaves.push(t);
         else t.children.forEach(ch => visit(ch));
       };
-      for (const t of testsToRun) visit(t);
+      for (const t of selected) visit(t);
 
       for (const test of leaves) {
         if (token.isCancellationRequested) break;
 
+        const bin = binaryByTestId.get(test.id);
+        if (!bin) {
+          run.errored(test, new vscode.TestMessage("Missing binary path for test item."));
+          continue;
+        }
+
         run.enqueued(test);
         run.started(test);
 
-        const bin = binaryByTestId.get(test.id);
-        run.appendOutput(`(step 3.5) Would run: ${test.label}\n`);
-        run.appendOutput(`(step 3.5) Binary path: ${bin ?? "<missing>"}\n`);
+        const startedAt = Date.now();
+        const result = await spawnAndReport(bin, run, test, token);
+        const durationMs = Date.now() - startedAt;
 
-        run.passed(test);
+        if (result.kind === "pass") run.passed(test, durationMs);
+        else if (result.kind === "fail") run.failed(test, result.message, durationMs);
+        else run.errored(test, result.message, durationMs);
       }
 
       run.end();
     },
     true
   );
+  controller.createRunProfile(
+  "Debug",
+  vscode.TestRunProfileKind.Debug,
+  async (request, token) => {
+    const run = controller.createTestRun(request, "CTestLens debug");
+
+    const selected: vscode.TestItem[] = [];
+    if (request.include && request.include.length > 0) selected.push(...request.include);
+    else controller.items.forEach(t => selected.push(t));
+
+    // Flatten to leaves
+    const leaves: vscode.TestItem[] = [];
+    const visit = (t: vscode.TestItem) => {
+      if (t.children.size === 0) leaves.push(t);
+      else t.children.forEach(ch => visit(ch));
+    };
+    selected.forEach(visit);
+
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    if (!folder) {
+      run.end();
+      return;
+    }
+
+    for (const test of leaves) {
+      if (token.isCancellationRequested) break;
+
+      const bin = binaryByTestId.get(test.id);
+      if (!bin) {
+        run.errored(test, new vscode.TestMessage("Missing binary path for test item."));
+        continue;
+      }
+
+      run.started(test);
+
+      const dbgConfig: vscode.DebugConfiguration = {
+        name: `Debug ${test.label}`,
+        type: "cppdbg",
+        request: "launch",
+        program: bin,
+        args: [],
+        cwd: folder.uri.fsPath,
+        MIMode: "gdb",
+        miDebuggerPath: "/usr/bin/gdb",
+        externalConsole: false
+      };
+
+      const ok = await vscode.debug.startDebugging(folder, dbgConfig);
+      if (ok) run.passed(test);
+      else run.errored(test, new vscode.TestMessage("Failed to start debugger."));
+    }
+
+    run.end();
+  },
+  true
+);
 
   output.appendLine("Step 3.5 ready: config roots + grouping + source mapping.");
+}
+
+function normalizeTestOutput(s: string): string {
+  s = s.replace(/\n/g, "\r\n"); //Required by the test run console
+  return s;
+}
+
+async function spawnAndReport(
+  bin: string,
+  run: vscode.TestRun,
+  test: vscode.TestItem,
+  token: vscode.CancellationToken
+): Promise<
+  | { kind: "pass" }
+  | { kind: "fail"; message: vscode.TestMessage }
+  | { kind: "error"; message: vscode.TestMessage }
+> {
+  run.appendOutput(`\n$ ${bin}\n`);
+
+  return new Promise(resolve => {
+    let stdout = "";
+    let stderr = "";
+
+    // const child = spawn(bin, [], {
+    //   cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath, // keep simple for now
+    //   env: process.env
+    // });
+    const child = spawn(bin, [], {
+      cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+      env: process.env,
+      detached: true,       // <-- important: new process group
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    // const kill = () => {
+    //   try { child.kill("SIGKILL"); } catch {}
+    // };
+    // token.onCancellationRequested(() => kill());
+    const killTree = () => {
+      if (!child.pid) return;
+      try {
+        // negative pid kills the whole process group on Linux
+        process.kill(-child.pid, "SIGINT");
+      } catch {}
+      setTimeout(() => { try { process.kill(-child.pid!, "SIGTERM"); } catch {} }, 300);
+      setTimeout(() => { try { process.kill(-child.pid!, "SIGKILL"); } catch {} }, 1500);
+    };
+
+    token.onCancellationRequested(() => {
+      run.appendOutput("\n[ctestlens] Cancel requested, terminating test...\n");
+      killTree();
+    });
+
+    child.stdout.on("data", d => {
+      const s = normalizeTestOutput(d.toString());
+      stdout += s;
+      run.appendOutput(s, undefined, test);
+    });
+
+    child.stderr.on("data", d => {
+      const s = normalizeTestOutput(d.toString());
+      stderr += s;
+      run.appendOutput(s, undefined, test);
+    });
+
+    child.on("error", err => {
+      resolve({ kind: "error", message: new vscode.TestMessage(String(err)) });
+    });
+
+    child.on("close", (code, signal) => {
+      if (signal) {
+        resolve({ kind: "fail", message: new vscode.TestMessage(`Terminated by signal: ${signal}`) });
+        return;
+      }
+      if (code === 0) {
+        resolve({ kind: "pass" });
+      } else {
+        // include a short tail to make failures visible even if output is huge
+        const tail = (s: string, n: number) => (s.length <= n ? s : s.slice(s.length - n));
+        const msgText =
+          `Exit code: ${code}\n\n` +
+          (stderr ? `--- stderr (tail) ---\n${tail(stderr, 4000)}\n` : "") +
+          (stdout ? `--- stdout (tail) ---\n${tail(stdout, 4000)}\n` : "");
+        resolve({ kind: "fail", message: new vscode.TestMessage(msgText) });
+      }
+      child.unref();
+    });
+  });
 }
 
 /*Deactivation Hook: Optional, Usually empty, Exists for symmetry
