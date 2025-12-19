@@ -5,6 +5,9 @@ import { constants as fsConstants } from "fs";
 import { spawn } from "child_process";
 
 type RootEntry = {
+  // Presentation/grouping
+  label?: string;          // optional display label
+  groupByLabel?: boolean;  // optional: group multiple roots under same label
   // Exactly one of these:
   workspacePath?: string; // relative to workspace root
   path?: string;          // absolute path
@@ -83,12 +86,16 @@ export function activate(context: vscode.ExtensionContext) {//Lifecycle Entry Po
     const defaultCfg: ConfigFile = {
       testRoots: [
         {
+          label: "Local build tests",
+          groupByLabel: true,
           workspacePath: "out/build/tests",
           pattern: "test_*"
         },
         {
+          label: "CI tests",
+          groupByLabel: true,
           path: "/home/user/tmp/ci-tests",
-          pattern: "**/*_test"
+          pattern: "*_test"
         }
       ]
     };
@@ -129,6 +136,14 @@ export function activate(context: vscode.ExtensionContext) {//Lifecycle Entry Po
         if (typeof r.pattern !== "string" || r.pattern.length === 0) {
           output.appendLine(`[config] root[${i}] missing/empty "pattern".`);
           return null;//Even if one entry is bad return null
+        }
+        if (r.label !== undefined && typeof r.label !== "string") {
+          output.appendLine(`[config] root[${i}] "label" must be a string if provided.`);
+          return null;
+        }
+        if (r.groupByLabel !== undefined && typeof r.groupByLabel !== "boolean") {
+          output.appendLine(`[config] root[${i}] "groupByLabel" must be a boolean if provided.`);
+          return null;
         }
       }
       return parsed;
@@ -347,6 +362,9 @@ export function activate(context: vscode.ExtensionContext) {//Lifecycle Entry Po
 
     output.appendLine(`[discover] roots=${cfg.testRoots.length}`);
 
+    const labelGroupCache = new Map<string, vscode.TestItem>();  // label -> group item
+    const labelGroupDirCache = new Map<string, Map<string, vscode.TestItem>>(); // label -> per-label groupCache for subdirs
+
     for (const [i, r] of cfg.testRoots.entries()) {
       const rootPath = await resolveRootPath(r);
       if (!rootPath) continue;
@@ -357,16 +375,57 @@ export function activate(context: vscode.ExtensionContext) {//Lifecycle Entry Po
         continue;
       }
 
-      const rootLabel = r.workspacePath ? `ws:${r.workspacePath}` : `abs:${rootPath}`;
-      const rootId = `root:${i}:${rootPath}`;
+      // Choose label: user-provided or computed default
+      const computedLabel = r.workspacePath ? `ws:${r.workspacePath}` : `abs:${rootPath}`;
+      const effectiveLabel = (r.label && r.label.trim().length > 0) ? r.label.trim() : computedLabel;
 
-      // Root group item
-      const rootGroup = controller.createTestItem(rootId, rootLabel);
-      // For navigation, we can point root group to workspace folder (optional).
-      //rootGroup.uri = folder.uri; FIXME Commented out check intent
-      controller.items.add(rootGroup);
+      // Decide container behavior
+      const doGroupByLabel = r.groupByLabel === true;
 
-      const groupCache = new Map<string, vscode.TestItem>();
+      // Determine the parent container (either shared label group or per-entry root)
+      let rootGroup: vscode.TestItem;
+      let groupCache: Map<string, vscode.TestItem>;
+
+      if (doGroupByLabel) {
+        // Use (or create) a shared group at controller root for this label
+        const existing = labelGroupCache.get(effectiveLabel);
+        if (existing) {
+          rootGroup = existing;
+        } else {
+          const groupId = `label:${effectiveLabel}`;
+          rootGroup = controller.createTestItem(groupId, effectiveLabel);
+          controller.items.add(rootGroup);
+          labelGroupCache.set(effectiveLabel, rootGroup);
+        }
+
+        // Use (or create) a persistent directory-group cache for this label
+        const existingDirCache = labelGroupDirCache.get(effectiveLabel);
+        if (existingDirCache) {
+          groupCache = existingDirCache;
+        } else {
+          groupCache = new Map<string, vscode.TestItem>();
+          labelGroupDirCache.set(effectiveLabel, groupCache);
+        }
+
+        // Under the shared label group, we still want to keep different roots separate,
+        // otherwise two roots with same relDir could collide. Create a per-root subgroup.
+        const rootSubId = `root:${i}:${rootPath}`;
+        const rootSubLabel = computedLabel; // shows origin (ws:... or abs:...) even when grouped
+        const rootSubGroup = controller.createTestItem(rootSubId, rootSubLabel);
+        rootGroup.children.add(rootSubGroup);
+
+        // For directory grouping under *this root*, use a fresh cache tied to the rootSubGroup
+        // to prevent collisions between different root paths.
+        groupCache = new Map<string, vscode.TestItem>();
+        rootGroup = rootSubGroup;
+      } else {
+        // Current behavior: one root group per entry
+        const rootId = `root:${i}:${rootPath}`;
+        rootGroup = controller.createTestItem(rootId, effectiveLabel);
+        controller.items.add(rootGroup);
+
+        groupCache = new Map<string, vscode.TestItem>();
+      }
 
       const allFiles = await walkFiles(rootPath);
       let added = 0;
