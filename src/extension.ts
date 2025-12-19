@@ -712,7 +712,7 @@ async function spawnAndReport(
   | { kind: "fail"; message: vscode.TestMessage }
   | { kind: "error"; message: vscode.TestMessage }
 > {
-  run.appendOutput(`\n$ ${bin}\n`);
+  run.appendOutput(`\r\n$ ${bin}\r\n`);
 
   return new Promise(resolve => {
     let stdout = "";
