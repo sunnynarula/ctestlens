@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CTestLens configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "testRoots": {
+      "type": "array",
+      "description": "List of roots to scan for test executables.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Display label for this root in the Testing UI."
+          },
+          "groupByLabel": {
+            "type": "boolean",
+            "description": "If true, roots with the same label appear under a shared group."
+          },
+          "workspacePath": {
+            "type": "string",
+            "description": "Workspace-relative path to the root directory containing test executables."
+          },
+          "path": {
+            "type": "string",
+            "description": "Absolute OR workspace-relative path (supports ./ and ../) to the root directory containing test executables."
+          },
+          "pattern": {
+            "type": "string",
+            "description": "Filename pattern for test executables (e.g., test_* , *_test)."
+          }
+        },
+        "allOf": [
+          {
+            "oneOf": [
+              { "required": ["workspacePath"] },
+              { "required": ["path"] }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "required": ["testRoots"]
+}

@@ -20,6 +20,12 @@
         "command": "cTestLens.discover",
         "title": "CTestLens: Rediscover tests"
       }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": [".vscode/ctestlens.jsonc"],
+        "url": "./schemas/ctestlens.schema.json"
+      }
     ]
   },
   "scripts": {
