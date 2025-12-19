@@ -154,18 +154,33 @@ export function activate(context: vscode.ExtensionContext) {//Lifecycle Entry Po
     }
   }
 
+  function resolveAgainstWorkspace(p: string): string | null {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    if (!folder) return null;
+
+    // Expand "~" (optional convenience; safe on Linux)
+    if (p.startsWith("~" + path.sep)) {
+      const home = process.env.HOME;
+      if (home) p = path.join(home, p.slice(2));
+    }
+
+    // Absolute stays absolute
+    if (path.isAbsolute(p)) return path.normalize(p);
+
+    // Allow "./..." or "../..." or "relative"
+    return path.normalize(path.join(folder.uri.fsPath, p));
+  }
+
   /*
     Convert a workspace resource's path to the absolute path in the file system
    */
   async function resolveRootPath(r: RootEntry): Promise<string | null> {
-    const folder = vscode.workspace.workspaceFolders?.[0];
-    if (!folder) return null;
-
     if (r.workspacePath) {
-      return path.join(folder.uri.fsPath, r.workspacePath);
+      return resolveAgainstWorkspace(r.workspacePath);
     }
     if (r.path) {
-      return r.path;
+      // NEW: allow r.path to be absolute OR workspace-relative ("./", "../", etc.)
+      return resolveAgainstWorkspace(r.path);
     }
     return null;
   }
@@ -369,15 +384,28 @@ export function activate(context: vscode.ExtensionContext) {//Lifecycle Entry Po
       const rootPath = await resolveRootPath(r);
       if (!rootPath) continue;
 
-      const okDir = await isDir(rootPath);
-      if (!okDir) {
-        output.appendLine(`[discover] root[${i}] invalid path: ${rootPath}`);
-        continue;
-      }
-
       // Choose label: user-provided or computed default
       const computedLabel = r.workspacePath ? `ws:${r.workspacePath}` : `abs:${rootPath}`;
       const effectiveLabel = (r.label && r.label.trim().length > 0) ? r.label.trim() : computedLabel;
+
+      if (!rootPath) {
+        output.appendLine(
+          `[discover] root[${i}] label="${effectiveLabel}" INVALID path (could not resolve)`
+        );
+        continue;
+      }
+
+      output.appendLine(
+        `[discover] root[${i}] label="${effectiveLabel}" resolved=${rootPath}`
+      );
+
+      const okDir = await isDir(rootPath);
+      if (!okDir) {
+        output.appendLine(
+          `[discover] root[${i}] label="${effectiveLabel}" NOT A DIRECTORY`
+        );
+        continue;
+      }
 
       // Decide container behavior
       const doGroupByLabel = r.groupByLabel === true;
