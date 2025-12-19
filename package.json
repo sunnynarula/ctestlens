@@ -52,7 +52,7 @@
     "native"
   ],
   "author": "Sunny Narula(voidtoverse.com)",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@types/node": "^25.0.3",
     "@types/vscode": "^1.85.0",
