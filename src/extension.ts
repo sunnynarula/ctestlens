@@ -3,6 +3,7 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import { constants as fsConstants } from "fs";
 import { spawn } from "child_process";
+import * as jsonc from "jsonc-parser";
 
 type RootEntry = {
   // Presentation/grouping
@@ -19,7 +20,7 @@ type ConfigFile = {
 };
 
 
-const CONFIG_REL = ".vscode/ctestlens.json";
+const CONFIG_REL = ".vscode/ctestlens.jsonc";
 
 
 /*
@@ -83,28 +84,87 @@ export function activate(context: vscode.ExtensionContext) {//Lifecycle Entry Po
     const vsdir = vscode.Uri.joinPath(folder.uri, ".vscode");
     try { await vscode.workspace.fs.createDirectory(vsdir); } catch {}
 
-    const defaultCfg: ConfigFile = {
-      testRoots: [
-        {
-          label: "Local build tests",
-          groupByLabel: true,
-          workspacePath: "out/build/tests",
-          pattern: "test_*"
-        },
-        {
-          label: "CI tests",
-          groupByLabel: true,
-          path: "/home/user/tmp/ci-tests",
-          pattern: "*_test"
-        }
-      ]
-    };
+    // const defaultCfg: ConfigFile = {
+    //   testRoots: [
+    //     {
+    //       label: "Local build tests",
+    //       groupByLabel: true,
+    //       workspacePath: "out/build/tests",
+    //       pattern: "test_*"
+    //     },
+    //     {
+    //       label: "CI tests",
+    //       groupByLabel: true,
+    //       path: "/home/user/tmp/ci-tests",
+    //       pattern: "*_test"
+    //     }
+    //   ]
+    // };
 
-    const bytes = Buffer.from(JSON.stringify(defaultCfg, null, 2), "utf8");
-    await vscode.workspace.fs.writeFile(cfgUri, bytes);
+    const template = `{
+  // CTestLens configuration file (JSONC: comments allowed).
+  //
+  // Each entry in "testRoots" defines a directory to scan for executables.
+
+  "testRoots": [
+    {
+      // label (optional): display name in the Testing UI.
+      "label": "Local build tests",
+
+      // groupByLabel (optional, default false):
+      // If true, roots with the same label appear under one shared group.
+      "groupByLabel": true,
+
+      // Choose ONE of:
+      // 1) workspacePath (workspace-relative)
+      "workspacePath": "out/build/tests",
+
+      // 2) path (absolute OR workspace-relative, supports ./ and ../)
+      // "path": "../../../build/tests",
+
+      // pattern (required): base-name pattern like test_* or *_test recommended
+      "pattern": "test_*"
+
+      // Future ideas(not yet working):
+      // "cwd": "\${workspaceFolder}",
+      // "env": { "LD_LIBRARY_PATH": "..." },
+      // "timeoutMs": 30000
+    },
+
+    {
+      "label": "CI tests",
+      "groupByLabel": true,
+      "path": "/home/user/tmp/ci-tests",
+      "pattern": "*_test"
+    }
+  ]
+}
+`;
+
+const bytes = Buffer.from(template, "utf8");
+await vscode.workspace.fs.writeFile(cfgUri, bytes);
+
 
     output.appendLine(`[init] created ${cfgUri.fsPath}`);
     vscode.window.showInformationMessage("CTestLens: Created .vscode/ctestlens.json");
+  }
+
+  function offsetToLineCol(text: string, offset: number): { line: number; col: number } {
+    // line/col are 1-based for user-friendly display
+    let line = 1;
+    let col = 1;
+
+    const limit = Math.max(0, Math.min(offset, text.length));
+    for (let i = 0; i < limit; i++) {
+      const ch = text.charCodeAt(i);
+      if (ch === 10) { // '\n'
+        line++;
+        col = 1;
+      } else {
+        col++;
+      }
+    }
+    return { line, col };
   }
 
   /*
@@ -118,7 +178,17 @@ export function activate(context: vscode.ExtensionContext) {//Lifecycle Entry Po
     try {
       const raw = await vscode.workspace.fs.readFile(cfgUri);
       const text = Buffer.from(raw).toString("utf8");
-      const parsed = JSON.parse(text) as ConfigFile;
+      const errors: jsonc.ParseError[] = [];
+      const parsed = jsonc.parse(text, errors, { allowTrailingComma: true }) as ConfigFile;
+
+      if (errors.length > 0) {
+        output.appendLine(`[config] JSONC parse errors in ${cfgUri.fsPath}:`);
+        for (const e of errors) {
+          const pos = offsetToLineCol(text, e.offset);
+          output.appendLine(`  - line ${pos.line}, col ${pos.col}: errorCode=${e.error}`);
+        }
+        return null;
+      }
 
       if (!parsed || !Array.isArray(parsed.testRoots)) {
         output.appendLine(`[config] invalid structure: expected { "testRoots": [...] }`);
