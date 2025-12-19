@@ -570,6 +570,15 @@ await vscode.workspace.fs.writeFile(cfgUri, bytes);
     })
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand("cTestLens.openDocs", async () => {
+      // Open the extension's packaged README.md (not the workspace README)
+      const readmeUri = vscode.Uri.joinPath(context.extensionUri, "README.md");
+      await vscode.commands.executeCommand("markdown.showPreview", readmeUri);
+    })
+  );
+
+
   // Discover on startup
   discover().catch(err => output.appendLine(`[discover] error: ${String(err)}`));
 
