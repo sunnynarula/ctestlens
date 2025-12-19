@@ -168,4 +168,4 @@ Future Windows support is possible by:
 
 ## License
 
-TODO Local/private project. Add a license file if you plan to publish.
+MIT
