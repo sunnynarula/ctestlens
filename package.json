@@ -48,5 +48,8 @@
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.7.1",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1"
   }
 }
