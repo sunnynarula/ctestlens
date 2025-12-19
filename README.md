@@ -152,6 +152,20 @@ LCOV:
 - “Stop doesn’t stop hung tests”
   - Ensure the runner is using process-group termination on Linux (detached spawn + kill(-pid)).
 
-License
+## Platform Support
+
+CTestLens is currently developed and tested on Linux (Ubuntu).
+
+Known limitations on Windows:
+- Executable discovery uses POSIX execute-permission checks (`X_OK`), which do not map cleanly to Windows.
+- Stopping hung tests uses POSIX process-group termination (negative PID kill), which is not supported on Windows.
+- Debug integration currently assumes `gdb` at `/usr/bin/gdb`.
+
+Future Windows support is possible by:
+- Treating `.exe/.bat/.cmd` (and `PATHEXT`) as executable,
+- Using Windows process-tree termination (e.g., `taskkill /T /F`),
+- Supporting `cppvsdbg` or configurable debugger backends.
+
+## License
 
 TODO Local/private project. Add a license file if you plan to publish.
