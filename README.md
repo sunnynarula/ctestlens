@@ -1,4 +1,4 @@
-resolveRootPath# CTestLens (Plain C Binary Tests for VS Code)
+# CTestLens (Plain C Binary Tests for VS Code)
 
 CTestLens is a minimal VS Code Testing integration for C (and C-like) projects where tests are ordinary executables.
 
