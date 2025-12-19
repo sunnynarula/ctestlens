@@ -1,12 +1,13 @@
 {
-  "name": "vscode-ext-c-binary-tests",
+  "name": "ctestlens",
   "version": "1.0.0",
   "displayName": "CTestLens",
-  "description": "Discover and publish C test binaries into VS Code's Testing UI",
+  "description": "Minimal VS Code Testing integration for plain C test executables.",
   "main": "./dist/extension.js",
   "engines": {
     "vscode": "^1.85.0"
   },
+  "categories": ["Testing"],
   "activationEvents": [
     "onStartupFinished"
   ],
