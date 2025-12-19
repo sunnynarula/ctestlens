@@ -698,7 +698,7 @@ await vscode.workspace.fs.writeFile(cfgUri, bytes);
 }
 
 function normalizeTestOutput(s: string): string {
-  s = s.replace(/\n/g, "\r\n"); //Required by the test run console
+  s = s.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n"); //Required by the test run console ensure crlf
   return s;
 }
 
