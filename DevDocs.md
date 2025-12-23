@@ -194,3 +194,12 @@ src/run.ts (spawn + stream output + pass/fail)
 src/debug.ts (gdb launching)
 
 We’ll build those one at a time.
+
+# How to compile
+npm run compile inside project root
+
+# How to package
+npx vsce package
+
+# How to install
+code --install <path>ctestlens-1.0.0.vsix
