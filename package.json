@@ -31,7 +31,19 @@
         "fileMatch": [".vscode/ctestlens.jsonc"],
         "url": "./schemas/ctestlens.schema.json"
       }
-    ]
+    ],
+    "configuration":
+      {
+        "title": "CTestLens",
+        "properties": {
+          "cTestLens.outputMode": {
+            "type": "string",
+            "default": "fullWithErrorSummary",
+            "enum": ["full", "stderrOnly", "fullWithErrorSummary"],
+            "description": "Controls what output is shown in Test Output."
+          }
+        }
+      }
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
