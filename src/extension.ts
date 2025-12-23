@@ -22,6 +22,15 @@ type ConfigFile = {
 
 const CONFIG_REL = ".vscode/ctestlens.jsonc";
 
+let output: vscode.OutputChannel;
+
+let DEBUG = true;
+
+function debug(msg: string) {
+  if(DEBUG) {
+    output.appendLine(`[ctestlens:debug] ${msg}`);
+  }
+}
 
 /*
 Big Picture First (mental model)
@@ -37,7 +46,7 @@ It only reacts when VS Code calls it.
 */
 //Export means visible outside the file
 export function activate(context: vscode.ExtensionContext) {//Lifecycle Entry Point for our extension called once
-  const output = vscode.window.createOutputChannel("CTestLens");/*Creates A named tab(filter) in Output panel,
+  output = vscode.window.createOutputChannel("CTestLens");/*Creates A named tab(filter) in Output panel,
                                                                   Persistent across activations,
                                                                   Ideal for logs, diagnostics, test output
                                                                 */
