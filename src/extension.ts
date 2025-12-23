@@ -711,6 +711,46 @@ function normalizeTestOutput(s: string): string {
   return s;
 }
 
+const FIRST_FILE_LINE_RE =
+  /((?:[A-Za-z]:[\\/]|\/)[^:\r\n]+?\.(?:c|h|cc|cpp|hpp)):(\d+)(?::(\d+))?/;
+
+function firstFileLineHit(text: string): { file: string; line: number; col: number } | null {
+  const m = FIRST_FILE_LINE_RE.exec(text);
+  if (!m) return null;
+  const line = parseInt(m[2], 10);
+  const col = m[3] ? parseInt(m[3], 10) : 1;
+  if (!Number.isFinite(line) || line <= 0) return null;
+  return { file: m[1], line, col };
+}
+
+async function resolvePathToUri(pathText: string): Promise<vscode.Uri | null> {
+  const norm = pathText.replace(/\\/g, path.sep);
+
+  // allow absolute paths even outside workspace if file exists
+  if (path.isAbsolute(norm)) {
+    try {
+      const uri = vscode.Uri.file(norm);
+      await vscode.workspace.fs.stat(uri);
+      return uri;
+    } catch {}
+  }
+
+  // fallback: basename search in workspace
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) return null;
+  const base = path.basename(norm);
+
+  const matches = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(folder, `**/${base}`),
+    "**/.git/**"
+  );
+
+  if (matches.length === 0) return null;
+  if (matches.length === 1) return matches[0];
+  matches.sort((a, b) => a.fsPath.length - b.fsPath.length);
+  return matches[0];
+}
+
 async function spawnAndReport(
   bin: string,
   run: vscode.TestRun,
@@ -773,7 +813,7 @@ async function spawnAndReport(
       resolve({ kind: "error", message: new vscode.TestMessage(String(err)) });
     });
 
-    child.on("close", (code, signal) => {
+    child.on("close", async (code, signal) => {
       if (signal) {
         resolve({ kind: "fail", message: new vscode.TestMessage(`Terminated by signal: ${signal}`) });
         return;
@@ -787,7 +827,24 @@ async function spawnAndReport(
           `Exit code: ${code}\n\n` +
           (stderr ? `--- stderr (tail) ---\n${tail(stderr, 4000)}\n` : "") +
           (stdout ? `--- stdout (tail) ---\n${tail(stdout, 4000)}\n` : "");
-        resolve({ kind: "fail", message: new vscode.TestMessage(msgText) });
+        const msg = new vscode.TestMessage(msgText);
+
+        // Try to attach a clickable location for the first file:line we find
+        const combined = (stderr ? stderr + "\n" : "") + (stdout ? stdout : "");
+        const hit = firstFileLineHit(combined);
+
+        if (hit) {
+          const uri = await resolvePathToUri(hit.file);
+          if (uri) {
+            msg.location = new vscode.Location(
+              uri,
+              new vscode.Position(Math.max(0, hit.line - 1), Math.max(0, hit.col - 1))
+            );
+          }
+        }
+
+        resolve({ kind: "fail", message: msg });
+
       }
       child.unref();
     });
